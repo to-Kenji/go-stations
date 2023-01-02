@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"database/sql"
+	"log"
+	"time"
 
 	"github.com/TechBowl-japan/go-stations/model"
 )
@@ -25,8 +27,32 @@ func (s *TODOService) CreateTODO(ctx context.Context, subject, description strin
 		insert  = `INSERT INTO todos(subject, description) VALUES(?, ?)`
 		confirm = `SELECT subject, description, created_at, updated_at FROM todos WHERE id = ?`
 	)
+	if len(subject) == 0 {
+		return &model.TODO{
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}, nil
+	}
+	result, err := s.db.ExecContext(ctx, insert, subject, description)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	return nil, nil
+	id, err := result.LastInsertId()
+	todo := model.TODO{
+		ID: int(id),
+	}
+	if err != nil {
+		log.Println(err)
+	}
+	err = s.db.QueryRowContext(ctx, confirm, id).Scan(&todo.Subject, &todo.Description, &todo.CreatedAt, &todo.UpdatedAt)
+	switch {
+	case err == sql.ErrNoRows:
+		log.Printf("no todo with id %d\n", id)
+	case err != nil:
+		log.Fatalf("query error: %v\n", err)
+	}
+	return &todo, err
 }
 
 // ReadTODO reads TODOs on DB.
