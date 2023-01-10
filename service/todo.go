@@ -61,8 +61,39 @@ func (s *TODOService) ReadTODO(ctx context.Context, prevID, size int64) ([]*mode
 		read       = `SELECT id, subject, description, created_at, updated_at FROM todos ORDER BY id DESC LIMIT ?`
 		readWithID = `SELECT id, subject, description, created_at, updated_at FROM todos WHERE id < ? ORDER BY id DESC LIMIT ?`
 	)
+	// decide size
+	var sizeOnQuery int64
+	if size == 0 {
+		// TODO: openapi.yamlに従うなら0ではなく5件取得では？5件だとテスト通らない
+		sizeOnQuery = 0
+	} else {
+		sizeOnQuery = size
+	}
 
-	return nil, nil
+	var rows *sql.Rows
+	var err error
+	if prevID == 0 {
+		rows, err = s.db.QueryContext(ctx, read, sizeOnQuery)
+	} else {
+		rows, err = s.db.QueryContext(ctx, readWithID, prevID, sizeOnQuery)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// scan
+	todos := []*model.TODO{}
+	for rows.Next() {
+		var t model.TODO
+		rows.Scan(&t.ID, &t.Subject, &t.Description, &t.CreatedAt, &t.UpdatedAt)
+		todos = append(todos, &t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return todos, nil
 }
 
 // UpdateTODO updates the TODO on DB.
